@@ -1,0 +1,25 @@
+{
+  "name": "job-applier-001",
+  "version": "1.0.0",
+  "private": true,
+  "description": "AI Job Application Copilot",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:web": "pnpm --filter web dev",
+    "dev:api": "cd apps/api && python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000",
+    "build": "pnpm --filter shared build && pnpm --filter web build",
+    "test": "pnpm --filter shared test && pnpm --filter web test",
+    "lint": "pnpm --filter shared lint && pnpm --filter web lint"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3"
+  },
+  "packageManager": "pnpm@8.15.0",
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=8.0.0"
+  }
+}

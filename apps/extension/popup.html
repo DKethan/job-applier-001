@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>JobCopilot</title>
+  <style>
+    body {
+      width: 320px;
+      padding: 16px;
+      font-family: system-ui, -apple-system, sans-serif;
+    }
+    button {
+      width: 100%;
+      padding: 8px;
+      background: #4F46E5;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      margin-top: 8px;
+    }
+    button:hover {
+      background: #4338CA;
+    }
+    .status {
+      margin-top: 12px;
+      padding: 8px;
+      border-radius: 4px;
+      background: #F3F4F6;
+    }
+  </style>
+</head>
+<body>
+  <h2>JobCopilot</h2>
+  <p>Autofill job application forms</p>
+  <button id="autofillBtn">Autofill Current Page</button>
+  <div id="status" class="status" style="display: none;"></div>
+  <script src="dist/popup.js"></script>
+</body>
+</html>
