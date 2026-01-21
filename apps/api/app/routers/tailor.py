@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from pymongo.database import Database
 from typing import Optional
 from bson import ObjectId
@@ -24,6 +24,7 @@ router = APIRouter()
 @router.post("", response_model=TailorResponse)
 async def tailor(
     request: TailorRequest,
+    req: Request,
     current_user: User = Depends(get_current_user),
     db: Database = Depends(get_db)
 ):
@@ -85,15 +86,28 @@ async def tailor(
     tailoring = await tailoring_service.tailor_resume(job_response, profile)
     
     # Generate documents
-    docx_file_id, pdf_file_id = await document_generator.generate_tailored_resume(
-        profile, tailoring, request.profile_id
+    docx_file_id, pdf_file_id, cover_letter_file_id, package_file_id = await document_generator.generate_tailored_resume(
+        profile, tailoring, job_response, request.profile_id
     )
-    
-    # Build download URLs
-    base_url = "http://localhost:8000"  # TODO: Get from settings
+
+    app_logger.log_info(f"Generated files - DOCX: {docx_file_id}, PDF: {pdf_file_id}, Cover Letter: {cover_letter_file_id}, Package: {package_file_id}")
+
+    # Build download URLs using the request's base URL
+    base_url = f"{req.url.scheme}://{req.url.hostname}"
+    if req.url.port and req.url.port != (443 if req.url.scheme == 'https' else 80):
+        base_url += f":{req.url.port}"
+
     tailoring.tailored_resume_docx_url = urljoin(base_url, f"/v1/downloads/{docx_file_id}")
     tailoring.tailored_resume_pdf_url = urljoin(base_url, f"/v1/downloads/{pdf_file_id}")
-    
+
+    # Add additional download URLs if files were generated
+    if cover_letter_file_id:
+        tailoring.cover_letter_docx_url = urljoin(base_url, f"/v1/downloads/{cover_letter_file_id}")
+        app_logger.log_info(f"Cover letter URL: {tailoring.cover_letter_docx_url}")
+    if package_file_id:
+        tailoring.application_package_docx_url = urljoin(base_url, f"/v1/downloads/{package_file_id}")
+        app_logger.log_info(f"Application package URL: {tailoring.application_package_docx_url}")
+
     return tailoring
 
 

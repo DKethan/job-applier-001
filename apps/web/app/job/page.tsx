@@ -16,6 +16,42 @@ export default function JobPage() {
   // Get profile info from API
   const profileId = profileStatus?.profileId
 
+  // Helper function for authenticated downloads
+  const downloadFile = async (url: string, filename: string) => {
+    const token = localStorage.getItem('auth_token');
+    if (!token) {
+      alert('Session expired. Please log in again.');
+      window.location.href = '/login';
+      return;
+    }
+
+    try {
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+      if (response.ok) {
+        const blob = await response.blob();
+        const blobUrl = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(blobUrl);
+        document.body.removeChild(a);
+      } else if (response.status === 401) {
+        alert('Session expired. Please log in again.');
+        window.location.href = '/login';
+      } else {
+        alert('Download failed. Please try again.');
+      }
+    } catch (error) {
+      alert('Download failed. Please try again.');
+    }
+  }
+
   useEffect(() => {
     const loadProfileAndProcessJob = async () => {
       if (!jobUrl) {
@@ -213,10 +249,10 @@ export default function JobPage() {
                   Suggested Resume Bullets
                 </h2>
                 <ul className="space-y-2">
-                  {tailoringData.suggested_bullets.map((bullet: string, index: number) => (
+                  {tailoringData.suggested_bullets.map((bullet: any, index: number) => (
                     <li key={index} className="flex items-start">
                       <span className="text-blue-500 mr-2">•</span>
-                      <span className="text-gray-700">{bullet}</span>
+                      <span className="text-gray-700">{bullet.tailored}</span>
                     </li>
                   ))}
                 </ul>
@@ -248,7 +284,7 @@ export default function JobPage() {
                     <p className="text-sm text-gray-600">Customized for this job</p>
                   </div>
                   <button
-                    onClick={() => window.open(tailoringData.tailored_resume_docx_url, '_blank')}
+                    onClick={() => downloadFile(tailoringData.tailored_resume_docx_url, 'tailored_resume.docx')}
                     className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
                   >
                     Download
@@ -261,19 +297,58 @@ export default function JobPage() {
                     <p className="text-sm text-gray-600">Professional format</p>
                   </div>
                   <button
-                    onClick={() => window.open(tailoringData.tailored_resume_pdf_url, '_blank')}
+                    onClick={() => downloadFile(tailoringData.tailored_resume_pdf_url, 'tailored_resume.pdf')}
                     className="bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700"
                   >
                     Download
                   </button>
                 </div>
 
+                {tailoringData.cover_letter_docx_url && (
+                  <div className="flex items-center justify-between p-4 border border-red-200 bg-red-50 rounded-lg">
+                    <div>
+                      <h3 className="font-medium text-red-900">Cover Letter (DOCX)</h3>
+                      <p className="text-sm text-red-700">Personalized for this application</p>
+                    </div>
+                    <button
+                      onClick={() => downloadFile(tailoringData.cover_letter_docx_url, 'cover_letter.docx')}
+                      className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700"
+                    >
+                      Download
+                    </button>
+                  </div>
+                )}
+
+                {tailoringData.application_package_docx_url && (
+                  <div className="flex items-center justify-between p-4 border border-green-200 bg-green-50 rounded-lg">
+                    <div>
+                      <h3 className="font-medium text-green-900">Complete Application Package</h3>
+                      <p className="text-sm text-green-700">Resume + Cover Letter + Application Summary</p>
+                    </div>
+                    <button
+                      onClick={() => downloadFile(tailoringData.application_package_docx_url, 'application_package.docx')}
+                      className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
+                    >
+                      Download All
+                    </button>
+                  </div>
+                )}
+
                 <div className="flex items-center justify-between p-4 border border-green-200 bg-green-50 rounded-lg">
                   <div>
                     <h3 className="font-medium text-green-900">Open & Autofill Application</h3>
                     <p className="text-sm text-green-700">Ready to apply with autofilled answers</p>
                   </div>
-                  <button className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">
+                  <button
+                    onClick={() => {
+                      if (jobData?.apply_url) {
+                        window.open(jobData.apply_url, '_blank');
+                      } else {
+                        alert('Apply URL not available. Please use the job posting link directly.');
+                      }
+                    }}
+                    className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
+                  >
                     Apply Now
                   </button>
                 </div>

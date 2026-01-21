@@ -22,6 +22,8 @@ async def download_file(
     db: Database = Depends(get_db)
 ):
     """Download a file (verify ownership, decrypt if needed)"""
+    app_logger.log_info(f"Download request for file_id: {file_id} by user: {current_user.id}")
+
     # Check if file exists in storage
     # First, try to find in FileStorage collection
     try:
@@ -91,28 +93,36 @@ async def download_file(
             upload_path = api_dir / upload_path
         upload_dir = upload_path.resolve()
         
-        # Check for PDF first, then DOCX
-        pdf_path = upload_dir / f"{file_id}.pdf"
-        docx_path = upload_dir / f"{file_id}.docx"
-        
-        # If PDF exists, serve it
-        if pdf_path.exists():
-            file_path = pdf_path
-            content_type = "application/pdf"
-            filename = pdf_path.name
-        # If PDF doesn't exist but DOCX does, serve DOCX (fallback for missing PDF)
-        elif docx_path.exists():
-            app_logger.log_info(f"PDF {file_id}.pdf not found, serving DOCX instead")
-            file_path = docx_path
-            content_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-            filename = docx_path.name
-        else:
+        # Check for various file patterns (PDF, DOCX, cover letter, application package)
+        possible_files = [
+            (upload_dir / f"{file_id}.pdf", "application/pdf"),
+            (upload_dir / f"{file_id}.docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
+            (upload_dir / f"{file_id}_cover_letter.docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
+            (upload_dir / f"{file_id}_application_package.docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
+        ]
+
+        # Find the first existing file
+        file_path = None
+        content_type = None
+        filename = None
+
+        for path, mime_type in possible_files:
+            if path.exists():
+                file_path = path
+                content_type = mime_type
+                filename = path.name
+                app_logger.log_info(f"Found file: {filename}")
+                break
+
+        if not file_path:
+            app_logger.log_error(f"No file found for ID: {file_id}. Checked paths: {[str(p[0]) for p in possible_files]}")
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="File not found"
             )
         
         # Return file (generated files are not encrypted)
+        app_logger.log_info(f"Serving file: {filename} with content-type: {content_type}")
         return FileResponse(
             str(file_path),
             media_type=content_type,
