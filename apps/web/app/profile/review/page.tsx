@@ -1055,7 +1055,7 @@ export default function ProfileReviewPage() {
                           setProfile({ ...profile, work_experience: newExp });
                         }}
                         className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                        placeholder="Python, React, Docker..."
+                        placeholder="Python, React, Docker"
                       />
                     </div>
 
@@ -1363,7 +1363,7 @@ export default function ProfileReviewPage() {
                           setProfile({ ...profile, projects: newProjects });
                         }}
                         className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                        placeholder="React, Node.js, MongoDB, Docker..."
+                        placeholder="React, Node.js, MongoDB, Docker"
                       />
                     </div>
 
