@@ -1,253 +1,82 @@
-# JobCopilot - AI Job Application Copilot
+# Hey there! 👋 Welcome to JobCopilot
 
-A production-grade monorepo application for automating job applications with AI-powered resume tailoring and form autofill.
+**Your friendly AI helper for job applications**
 
-## Architecture
+Tired of customizing your resume for every single job? JobCopilot makes it easy! Just upload your resume, paste a job posting link, and we'll create perfectly tailored resume and cover letter combinations that actually match what employers want.
 
-- **apps/web**: Next.js 14+ web application (App Router, TypeScript, Tailwind)
-- **apps/api**: FastAPI backend (Python) with Pydantic schemas, MongoDB database
-- **apps/extension**: Chrome MV3 extension for form autofill
-- **packages/shared**: Shared TypeScript types (Zod schemas) and utilities
-- **Database**: MongoDB (hosted MongoDB Atlas cluster)
+**We're building this together** - come join our friendly open-source community! 🚀
 
-## Prerequisites
+[![GitHub stars](https://img.shields.io/github/stars/DKethan/job-applier-001?style=social)](https://github.com/DKethan/job-applier-001)
+![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=flat-square&logo=python)
+![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=flat-square&logo=fastapi)
+![Next.js](https://img.shields.io/badge/Next.js-000000?style=flat-square&logo=next.js)
 
-- Node.js 20+ ([Download](https://nodejs.org/))
-- pnpm 8+ (Install with: `npm install -g pnpm` or see below)
-- **Python 3.11 or 3.12** (NOT 3.13 - many packages don't support it yet)
-  - [Download Python 3.11](https://www.python.org/downloads/) or install via conda
-- Conda or Miniconda ([Download](https://docs.conda.io/en/latest/miniconda.html)) - OR use venv
-- MongoDB Atlas account (free tier works) or local MongoDB
-
-## Installation
-
-### Step 1: Install pnpm (if not installed)
+## Get Started in 5 Minutes 🚀
 
 ```bash
-# Option A: Using npm (recommended)
-npm install -g pnpm
+# 1. Grab the code
+git clone https://github.com/DKethan/job-applier-001.git
+cd job-applier-001
 
-# Option B: Using Homebrew (macOS)
-brew install pnpm
+# 2. Set up your accounts (MongoDB + OpenAI)
+# We'll walk you through this below
 
-# Option C: Using curl
-curl -fsSL https://get.pnpm.io/install.sh | sh -
-```
-
-Verify installation:
-```bash
-pnpm --version
-```
-
-### Step 2: Setup Environment Files
-
-```bash
-# Copy root .env.example
-cp .env.example .env
-
-# Copy API .env.example
-cp apps/api/.env.example apps/api/.env
-
-# Copy web .env.example
-cp apps/web/.env.example apps/web/.env
-
-# Copy extension .env.example
-cp apps/extension/.env.example apps/extension/.env
-```
-
-2. **Generate secrets for API (JWT and encryption keys):**
-
-**Option A: Use the provided script (easiest):**
-```bash
-python3 scripts/generate_secrets.py
-```
-
-**Option B: Generate manually:**
-```bash
-# Generate JWT secret (32 characters, URL-safe)
-python3 -c "import secrets; print(secrets.token_urlsafe(32))"
-
-# Generate encryption key (32 bytes, base64 encoded)
-python3 -c "import secrets; import base64; print(base64.b64encode(secrets.token_bytes(32)).decode())"
-```
-
-**Option C: Quick one-liner (generates both):**
-```bash
-python3 -c "import secrets, base64; print(f'JWT_SECRET={secrets.token_urlsafe(32)}'); print(f'ENCRYPTION_KEY_BASE64={base64.b64encode(secrets.token_bytes(32)).decode()}')"
-```
-
-Copy the output values to `apps/api/.env`:
-- `JWT_SECRET`: Used to sign authentication tokens (prevents token tampering)
-- `ENCRYPTION_KEY_BASE64`: Used to encrypt PII data at rest (protects sensitive user data)
-
-**Why these are needed:**
-- **JWT_SECRET**: Signs authentication tokens. Without it, anyone could forge login tokens.
-- **ENCRYPTION_KEY_BASE64**: Encrypts sensitive data (profiles, resumes) before storing in database.
-
-3. **Update API .env with required values:**
-   - `MONGODB_URI`: Your MongoDB connection string (already set in `.env.example`)
-   - `OPENAI_API_KEY`: Your OpenAI API key (get from https://platform.openai.com/api-keys)
-
-## Local Development
-
-### Step 3: Install Node.js Dependencies
-
-```bash
-# Install all dependencies (this installs for web, extension, and shared packages)
-pnpm install
-
-# Build shared package (required before running web app)
-cd packages/shared
-pnpm build
-cd ../..
-```
-
-**Troubleshooting:** 
-- If you get "workspace:*" errors, make sure you're using `pnpm`, not `npm`
-- If you see lxml warnings about 'html-clean' extra - this is harmless, ignore it
-
-### Step 4: Setup and Run API
-
-```bash
-cd apps/api
-
-# IMPORTANT: Use Python 3.11 or 3.12 (NOT 3.13 - many packages don't support it yet)
-# Delete existing environment if it has Python 3.13:
-# conda deactivate
-# conda env remove -n job-applier-001
-
-# Create conda environment with Python 3.11
-conda create -n job-applier-001 python=3.11 -y
-conda activate job-applier-001
-
-# OR if using venv (alternative):
-# python3.11 -m venv job-applier-001
-# source job-applier-001/bin/activate  # On Windows: job-applier-001\Scripts\activate
-
-# Verify Python version (should be 3.11.x)
-python --version
-
-# Install Python dependencies
-pip install -r requirements.txt
-
-# Test MongoDB connection (optional)
-python test_connection.py
-
-# Run API server
+# 3. Get everything running
+conda create -n jobcopilot python=3.11 -y
+conda activate jobcopilot
+cd apps/api && pip install -r requirements.txt
 python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+
+# 4. In another terminal
+pnpm install && pnpm run dev
+
+# 5. Visit http://localhost:3000
 ```
 
-The API will be available at: http://localhost:8000
-- API docs: http://localhost:8000/docs
-- Health check: http://localhost:8000/health
+## 📚 Learn More
 
-**Note:** MongoDB indexes are created automatically on first run.
+| Guide | What you'll find |
+|-------|------------------|
+| **[📖 What JobCopilot Does](README-CURRENT.md)** | Current features and how to use them |
+| **[🔧 Installation Guide](README-INSTALL.md)** | Step-by-step setup instructions |
+| **[🚀 Future Plans](README-FUTURE.md)** | What's coming next |
+| **[💻 Technical Docs](README-PROJECT.md)** | API reference and architecture |
 
-### Step 5: Run Web App (in a new terminal)
+## 🤝 We're Open Source & Looking for Contributors!
 
-```bash
-# Make sure you're in the project root
-cd apps/web
+**Hey students and beginners!** 🎓 This is perfect for you! We're using cool modern tech that you'll actually use in real jobs:
 
-# Run Next.js dev server
-pnpm dev
-```
+- **Frontend**: Next.js, React, TypeScript, Tailwind CSS
+- **Backend**: FastAPI, Python, MongoDB
+- **AI/ML**: OpenAI GPT integration
+- **DevOps**: Docker, automated testing
 
-The web app will be available at: http://localhost:3000
+### How You Can Help:
+- 🐛 **Fix bugs** - Start with something small and easy
+- ✨ **Add features** - Make the UI prettier or add new templates
+- 📝 **Improve docs** - Help other beginners get started
+- 🧪 **Write tests** - Make sure everything works reliably
 
-### Step 6: Build and Load Extension (Optional)
+**Ready to jump in?** Check out our [easy contributing guide](README-PROJECT.md#contributing).
 
-```bash
-cd apps/extension
+### What We're Working On Now:
+- Smart Chrome extension for auto-filling job forms
+- Making our AI even better at tailoring resumes
+- Mobile-friendly design improvements
+- Speeding things up
 
-# Build the extension
-pnpm build
+## 💬 Got Ideas or Feedback?
 
-# Load in Chrome:
-# 1. Open Chrome and go to chrome://extensions/
-# 2. Enable "Developer mode" (toggle in top right)
-# 3. Click "Load unpacked"
-# 4. Navigate to and select the `apps/extension/dist` directory
-```
+We'd love to hear from you! Whether you have:
+- ✨ **Feature suggestions** - What would make JobCopilot better?
+- 🐛 **Bug reports** - Found something not working right?
+- 💡 **Questions** - Need help getting started?
+- 🤝 **Collaboration ideas** - Want to work together?
 
-The extension will autofill job application forms when you visit application pages.
+**Head over to our [GitHub Issues](https://github.com/DKethan/job-applier-001/issues) and let's chat!**
 
-## Quick Start Summary
+---
 
-1. Install pnpm: `npm install -g pnpm`
-2. Install Node deps: `pnpm install` (from project root)
-3. Build shared package: `cd packages/shared && pnpm build && cd ../..`
-4. Copy `.env.example` files to `.env` in each app
-5. Create conda env with Python 3.11: `conda create -n job-applier-001 python=3.11 -y && conda activate job-applier-001`
-   - **Important:** Use Python 3.11 or 3.12, NOT 3.13 (packages don't support it yet)
-6. Install Python deps: `cd apps/api && pip install -r requirements.txt`
-7. Generate secrets: `python3 scripts/generate_secrets.py`
-8. Update `apps/api/.env` with your MongoDB URI and OpenAI API key
-9. Run API: `cd apps/api && conda activate job-applier-001 && python -m uvicorn app.main:app --reload`
-10. Run Web: `cd apps/web && pnpm dev` (in new terminal)
+**Made with ❤️ for job seekers everywhere by a team of friendly developers**
 
-## Testing
-
-### Run Ingest Test CLI
-
-```bash
-cd apps/api
-python -m tools.ingest_test --url "https://job-boards.greenhouse.io/doordashusa/jobs/7264631"
-```
-
-This tests job posting ingestion. Make sure your `.env` file is configured with MongoDB URI.
-
-### API Tests
-
-```bash
-cd apps/api
-pytest
-```
-
-## Environment Variables
-
-See `.env.example` files in each app directory. Copy them to `.env` and fill in required values.
-
-**Critical variables for `apps/api/.env`:**
-- `MONGODB_URI`: Already set in `.env.example` (or use your own MongoDB Atlas connection)
-- `MONGODB_DB_NAME`: Database name (default: `jobcopilot`)
-- `ENCRYPTION_KEY_BASE64`: Generate with `python3 scripts/generate_secrets.py`
-- `JWT_SECRET`: Generate with `python3 scripts/generate_secrets.py`
-- `OPENAI_API_KEY`: Get from https://platform.openai.com/api-keys
-
-**Note:** MongoDB indexes are created automatically on first run. No manual migrations needed!
-
-## Project Structure
-
-```
-job-applier-001/
-├── apps/
-│   ├── api/              # FastAPI backend
-│   │   ├── app/
-│   │   │   ├── routers/  # API route handlers
-│   │   │   ├── services/ # Business logic
-│   │   │   ├── ingestion/ # Job posting extractors
-│   │   │   └── utils/    # Utilities (encryption, logging)
-│   │   ├── tests/
-│   │   └── tools/        # CLI tools
-│   ├── web/              # Next.js app
-│   │   └── app/          # App Router pages
-│   └── extension/        # Chrome extension
-│       └── src/          # Extension source
-├── packages/
-│   └── shared/           # Shared types
-└── docker-compose.yml
-```
-
-## Features
-
-- **Job Ingestion**: Supports multiple ATS providers (Greenhouse, Lever, Ashby, SmartRecruiters, Workday, Oracle CX, Avature, etc.)
-- **Resume Parsing**: Extract structured profile data from PDF/DOCX resumes using LLM
-- **Resume Tailoring**: AI-powered resume customization based on job descriptions
-- **Document Generation**: Generate tailored resumes in DOCX and PDF formats
-- **Form Autofill**: Chrome extension with intelligent field detection and confidence scoring
-- **Security**: PII encryption at rest, XSS prevention, PII redaction in logs
-
-## License
-
-Private - All Rights Reserved
+⭐ **If this helps you land your dream job, please star our repo - it keeps us motivated!** 🌟

@@ -180,6 +180,8 @@ async def upload_resume(
                 {"user_id": str(current_user.id)},
                 {"$set": {
                     "encrypted_json": encrypted_profile,
+                    "original_file_id": file_id,
+                    "original_file_ext": file_ext,
                     "updated_at": datetime.utcnow()
                 }}
             )
@@ -202,7 +204,9 @@ async def upload_resume(
 
             profile = ProfileModel(
                 user_id=str(current_user.id),
-                encrypted_json=encrypted_profile
+                encrypted_json=encrypted_profile,
+                original_file_id=file_id,
+                original_file_ext=file_ext
             )
             result = db.profiles.insert_one(profile.to_dict())
             profile_id = result.inserted_id

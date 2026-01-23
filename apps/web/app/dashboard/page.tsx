@@ -236,7 +236,7 @@ function JobUrlInputCard({
             value={jobUrl}
             onChange={(e) => setJobUrl(e.target.value)}
             placeholder="https://..."
-            className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+            className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
             required
           />
           <p className="mt-1 text-sm text-gray-500">

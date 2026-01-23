@@ -54,6 +54,7 @@ def init_db():
         db.profiles.create_index("user_id")
         db.job_postings.create_index("source_url", unique=True)
         db.file_storage.create_index("user_id")
+        db.job_applications.create_index([("user_id", 1), ("job_id", 1)], unique=True)
         
         app_logger.log_info("Database indexes created")
     except Exception as e:

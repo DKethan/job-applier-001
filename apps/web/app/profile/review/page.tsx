@@ -14,7 +14,6 @@ interface ProfileData {
     location: string | null;
     headline: string | null;
     summary: string | null;
-    languages: string[] | null;
     links: Array<{
       type: string;
       url: string;
@@ -109,6 +108,73 @@ export default function ProfileReviewPage() {
   const { isAuthenticated } = useAuth();
   const router = useRouter();
 
+  // Helper function to parse descriptions into multiple bullet points
+  const parseDescriptionIntoBullets = (description: string): string[] => {
+    if (!description) return [];
+
+    // First, split by existing line breaks
+    let lines = description.split('\n').filter(line => line.trim());
+
+    // If there are multiple lines, treat each as a bullet
+    if (lines.length > 1) {
+      return lines.map(line => line.trim());
+    }
+
+    // If it's one long paragraph, split by sentences and logical breaks
+    const text = description.trim();
+
+    // Try multiple splitting strategies, starting with the most aggressive
+
+    // Strategy 1: Split by periods followed by capital letters (most reliable)
+    let sentences = text.split(/\.\s*(?=[A-Z])/).filter(s => s.trim().length > 0);
+    if (sentences.length > 1) {
+      return sentences.map(s => s.trim() + (s.trim().endsWith('.') ? '' : '.')).filter(s => s.length > 1);
+    }
+
+    // Strategy 2: Split by any periods
+    sentences = text.split(/\./).filter(s => s.trim().length > 0);
+    if (sentences.length > 1) {
+      return sentences.map(s => s.trim() + (s.trim().endsWith('.') ? '' : '.')).filter(s => s.length > 1);
+    }
+
+    // Strategy 3: Split by semicolons
+    sentences = text.split(/\;/).filter(s => s.trim().length > 0);
+    if (sentences.length > 1) {
+      return sentences.map(s => s.trim()).filter(s => s.length > 0);
+    }
+
+    // Strategy 4: Split by commas (if more than 2)
+    const commaParts = text.split(/,/).filter(s => s.trim().length > 0);
+    if (commaParts.length > 2) {
+      return commaParts.map(s => s.trim()).filter(s => s.length > 0);
+    }
+
+    // Strategy 5: Force split long text into chunks of ~100 characters
+    if (text.length > 200) {
+      const chunks: string[] = [];
+      let remaining = text;
+      while (remaining.length > 100) {
+        let chunkEnd = 100;
+        // Try to find a good break point near the end
+        for (let i = Math.min(100, remaining.length - 1); i > 50; i--) {
+          if (remaining[i] === ' ' || remaining[i] === ',') {
+            chunkEnd = i;
+            break;
+          }
+        }
+        chunks.push(remaining.substring(0, chunkEnd).trim());
+        remaining = remaining.substring(chunkEnd).trim();
+      }
+      if (remaining.length > 0) {
+        chunks.push(remaining);
+      }
+      return chunks.filter(chunk => chunk.length > 10);
+    }
+
+    // If no good splitting points found, return the whole text as one bullet
+    return [text];
+  };
+
   useEffect(() => {
     if (!isAuthenticated) {
       router.push('/login');
@@ -122,7 +188,12 @@ export default function ProfileReviewPage() {
     try {
       const response = await apiClient.get('/v1/profile/me');
       if (response.profile) {
-        setProfile(response.profile);
+        // Clean up the profile data - remove basics.languages if it exists
+        const cleanedProfile = { ...response.profile };
+        if (cleanedProfile.basics && cleanedProfile.basics.languages) {
+          delete cleanedProfile.basics.languages;
+        }
+        setProfile(cleanedProfile);
       }
     } catch (err) {
       setError('Failed to load profile');
@@ -245,6 +316,25 @@ export default function ProfileReviewPage() {
     });
   };
 
+  const addLink = () => {
+    if (!profile) return;
+
+    const newLink = {
+      type: '',
+      url: '',
+      label: ''
+    };
+
+    const currentLinks = profile.basics.links || [];
+    setProfile({
+      ...profile,
+      basics: {
+        ...profile.basics,
+        links: [...currentLinks, newLink]
+      }
+    });
+  };
+
   const generateMarkdown = (profileData: ProfileData): string => {
     let markdown = '';
 
@@ -257,6 +347,19 @@ export default function ProfileReviewPage() {
     if (profileData.basics.phone) contactInfo.push(`📱 ${profileData.basics.phone}`);
     if (profileData.basics.location) contactInfo.push(`📍 ${profileData.basics.location}`);
 
+    // Add links
+    if (profileData.basics.links && profileData.basics.links.length > 0) {
+      profileData.basics.links.forEach(link => {
+        if (link.url) {
+          const icon = link.type === 'LinkedIn' ? '💼' :
+                      link.type === 'GitHub' ? '💻' :
+                      link.type === 'Portfolio' ? '🎨' :
+                      link.type === 'Website' ? '🌐' : '🔗';
+          contactInfo.push(`${icon} [${link.label || link.type}](${link.url})`);
+        }
+      });
+    }
+
     if (contactInfo.length > 0) {
       markdown += '## Contact Information\n\n';
       contactInfo.forEach(info => markdown += `${info}\n`);
@@ -268,11 +371,6 @@ export default function ProfileReviewPage() {
       markdown += `## Professional Summary\n\n${profileData.basics.summary}\n\n`;
     }
 
-    // Languages
-    if (profileData.basics.languages && profileData.basics.languages.length > 0) {
-      markdown += '## Languages\n\n';
-      markdown += `- ${profileData.basics.languages.join(', ')}\n\n`;
-    }
 
     // Work Experience
     if (profileData.work_experience.length > 0) {
@@ -288,7 +386,15 @@ export default function ProfileReviewPage() {
         markdown += `**${startDate} - ${endDate}**\n\n`;
 
         if (exp.description) {
-          markdown += `${exp.description}\n\n`;
+          // Split description into multiple bullet points based on sentences and logical breaks
+          const descriptionBullets = parseDescriptionIntoBullets(exp.description);
+          if (descriptionBullets.length > 0) {
+            markdown += '**Description:**\n';
+            descriptionBullets.forEach(bullet => {
+              markdown += `- ${bullet.trim()}\n`;
+            });
+            markdown += '\n';
+          }
         }
 
         if (exp.bullets.length > 0) {
@@ -369,7 +475,15 @@ export default function ProfileReviewPage() {
         markdown += `### ${project.name}\n\n`;
 
         if (project.description) {
-          markdown += `${project.description}\n\n`;
+          // Split description into multiple bullet points based on sentences and logical breaks
+          const descriptionBullets = parseDescriptionIntoBullets(project.description);
+          if (descriptionBullets.length > 0) {
+            markdown += '**Description:**\n';
+            descriptionBullets.forEach(bullet => {
+              markdown += `- ${bullet.trim()}\n`;
+            });
+            markdown += '\n';
+          }
         }
 
         if (project.bullets.length > 0) {
@@ -428,6 +542,62 @@ export default function ProfileReviewPage() {
       Object.entries(skillsByCategory).forEach(([category, skills]) => {
         markdown += `### ${category}\n`;
         markdown += `${skills.join(' • ')}\n\n`;
+      });
+    }
+
+    // Certifications
+    if (profileData.certifications && profileData.certifications.length > 0) {
+      markdown += '## Certifications\n\n';
+      profileData.certifications.forEach(cert => {
+        markdown += `### ${cert.name}\n`;
+        if (cert.issuer) markdown += `**Issuer:** ${cert.issuer}\n`;
+        if (cert.date) markdown += `**Date:** ${cert.date}\n`;
+        if (cert.credentialId) markdown += `**Credential ID:** ${cert.credentialId}\n`;
+
+        if (cert.description) {
+          // Split description into multiple bullet points based on sentences and logical breaks
+          const descriptionBullets = parseDescriptionIntoBullets(cert.description);
+          if (descriptionBullets.length > 0) {
+            markdown += '\n**Description:**\n';
+            descriptionBullets.forEach(bullet => {
+              markdown += `- ${bullet.trim()}\n`;
+            });
+          }
+        }
+
+        if (cert.skills && cert.skills.length > 0) {
+          markdown += `\n**Skills:** ${cert.skills.join(', ')}\n`;
+        }
+
+        if (cert.url) markdown += `\n**URL:** ${cert.url}\n`;
+
+        markdown += '\n---\n\n';
+      });
+    }
+
+    // Awards
+    if (profileData.awards && profileData.awards.length > 0) {
+      markdown += '## Awards & Honors\n\n';
+      profileData.awards.forEach(award => {
+        markdown += `### ${award.name}\n`;
+        if (award.issuer) markdown += `**Issuer:** ${award.issuer}\n`;
+        if (award.date) markdown += `**Date:** ${award.date}\n`;
+        if (award.category) markdown += `**Category:** ${award.category}\n`;
+
+        if (award.description) {
+          // Split description into multiple bullet points based on sentences and logical breaks
+          const descriptionBullets = parseDescriptionIntoBullets(award.description);
+          if (descriptionBullets.length > 0) {
+            markdown += '\n**Description:**\n';
+            descriptionBullets.forEach(bullet => {
+              markdown += `- ${bullet.trim()}\n`;
+            });
+          }
+        }
+
+        if (award.recognition) markdown += `\n**Recognition:** ${award.recognition}\n`;
+
+        markdown += '\n---\n\n';
       });
     }
 
@@ -540,6 +710,25 @@ export default function ProfileReviewPage() {
           newProfile.basics.phone = line.substring(2).trim();
         } else if (line.startsWith('📍')) {
           newProfile.basics.location = line.substring(2).trim();
+        } else if (line.includes('[') && line.includes('](') && line.includes(')')) {
+          // Parse markdown links like: 🔗 [LinkedIn Profile](https://linkedin.com/in/username)
+          const linkMatch = line.match(/(.)\s*\[([^\]]+)\]\(([^)]+)\)/);
+          if (linkMatch) {
+            const [, emoji, label, url] = linkMatch;
+            const linkType = emoji === '💼' ? 'LinkedIn' :
+                           emoji === '💻' ? 'GitHub' :
+                           emoji === '🎨' ? 'Portfolio' :
+                           emoji === '🌐' ? 'Website' : 'Other';
+
+            if (!newProfile.basics.links) {
+              newProfile.basics.links = [];
+            }
+            newProfile.basics.links.push({
+              type: linkType,
+              url: url,
+              label: label
+            });
+          }
         }
         continue;
       }
@@ -555,16 +744,6 @@ export default function ProfileReviewPage() {
         continue;
       }
 
-      // Parse languages
-      if (currentSection === 'languages') {
-        if (line.startsWith('- ')) {
-          if (!newProfile.basics.languages) {
-            newProfile.basics.languages = [];
-          }
-          newProfile.basics.languages.push(line.substring(2).trim());
-        }
-        continue;
-      }
 
       // Parse work experience details
       if (currentSection === 'work_experience' && currentItem) {
@@ -585,6 +764,9 @@ export default function ProfileReviewPage() {
             currentItem.startDate = dates[0].trim();
             currentItem.endDate = dates[1].trim() === 'Present' ? null : dates[1].trim();
           }
+        } else if (line.startsWith('**Description:**')) {
+          parsingBullets = true;
+          bulletType = 'description';
         } else if (line.startsWith('**Responsibilities:**')) {
           parsingBullets = true;
           bulletType = 'bullets';
@@ -596,7 +778,12 @@ export default function ProfileReviewPage() {
           currentItem.technologies = techLine.split(',').map(t => t.trim()).filter(t => t);
         } else if (parsingBullets && line.startsWith('- ')) {
           const bullet = line.substring(2).trim();
-          if (bulletType === 'bullets') {
+          if (bulletType === 'description') {
+            if (!currentItem.description) {
+              currentItem.description = '';
+            }
+            currentItem.description += (currentItem.description ? '\n\n' : '') + bullet;
+          } else if (bulletType === 'bullets') {
             currentItem.bullets.push(bullet);
           } else if (bulletType === 'achievements') {
             currentItem.achievements.push(bullet);
@@ -644,7 +831,13 @@ export default function ProfileReviewPage() {
 
       // Parse project details
       if (currentSection === 'projects' && currentItem) {
-        if (line.startsWith('**Outcomes')) {
+        if (line.startsWith('**Description:**')) {
+          parsingBullets = true;
+          bulletType = 'description';
+        } else if (line.startsWith('**Key Features/Contributions:**')) {
+          parsingBullets = true;
+          bulletType = 'bullets';
+        } else if (line.startsWith('**Outcomes')) {
           parsingBullets = true;
           bulletType = 'outcomes';
         } else if (line.startsWith('**Technologies:**')) {
@@ -652,15 +845,18 @@ export default function ProfileReviewPage() {
           currentItem.tech = techLine.split(',').map(t => t.trim()).filter(t => t);
         } else if (parsingBullets && line.startsWith('- ')) {
           const bullet = line.substring(2).trim();
-          currentItem.outcomes.push(bullet);
+          if (bulletType === 'description') {
+            if (!currentItem.description) {
+              currentItem.description = '';
+            }
+            currentItem.description += (currentItem.description ? '\n\n' : '') + bullet;
+          } else if (bulletType === 'outcomes') {
+            currentItem.outcomes.push(bullet);
+          } else if (bulletType === 'bullets') {
+            currentItem.bullets.push(bullet);
+          }
         } else if (!parsingBullets && line.startsWith('- ')) {
           currentItem.bullets.push(line.substring(2).trim());
-        } else if (!parsingBullets && line && !line.startsWith('**')) {
-          // Project description
-          if (!currentItem.description) {
-            currentItem.description = '';
-          }
-          currentItem.description += (currentItem.description ? '\n' : '') + line;
         }
         continue;
       }
@@ -822,7 +1018,7 @@ export default function ProfileReviewPage() {
                       ...profile,
                       basics: { ...profile.basics, firstName: e.target.value }
                     })}
-                    className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
                 <div>
@@ -834,7 +1030,7 @@ export default function ProfileReviewPage() {
                       ...profile,
                       basics: { ...profile.basics, lastName: e.target.value }
                     })}
-                    className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
                 <div>
@@ -846,7 +1042,7 @@ export default function ProfileReviewPage() {
                       ...profile,
                       basics: { ...profile.basics, email: e.target.value || null }
                     })}
-                    className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
                 <div>
@@ -858,7 +1054,7 @@ export default function ProfileReviewPage() {
                       ...profile,
                       basics: { ...profile.basics, phone: e.target.value || null }
                     })}
-                    className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
               </div>
@@ -873,45 +1069,79 @@ export default function ProfileReviewPage() {
                     basics: { ...profile.basics, summary: e.target.value || null }
                   })}
                   rows={3}
-                  className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                   placeholder="Brief professional summary or objective..."
                 />
               </div>
 
-              {/* Languages */}
+              {/* Links */}
               <div>
                 <div className="flex justify-between items-center mb-2">
-                  <label className="block text-sm font-medium text-gray-700">Languages</label>
+                  <label className="block text-sm font-medium text-gray-700">Links</label>
                   <button
-                    onClick={addLanguage}
+                    onClick={addLink}
                     className="text-blue-600 hover:text-blue-800 text-sm"
                   >
-                    + Add Language
+                    + Add Link
                   </button>
                 </div>
                 <div className="space-y-2">
-                  {(profile.basics.languages || []).map((language, index) => (
+                  {(profile.basics.links || []).map((link, index) => (
                     <div key={index} className="flex space-x-2">
-                      <input
-                        type="text"
-                        value={language}
+                      <select
+                        value={link.type}
                         onChange={(e) => {
-                          const newLanguages = [...(profile.basics.languages || [])];
-                          newLanguages[index] = e.target.value;
+                          const newLinks = [...(profile.basics.links || [])];
+                          newLinks[index].type = e.target.value;
                           setProfile({
                             ...profile,
-                            basics: { ...profile.basics, languages: newLanguages }
+                            basics: { ...profile.basics, links: newLinks }
                           });
                         }}
-                        className="flex-1 border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                        placeholder="Language name"
+                        className="flex-1 border border-gray-300 rounded-md px-3 py-2 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      >
+                        <option value="">Select type</option>
+                        <option value="LinkedIn">LinkedIn</option>
+                        <option value="GitHub">GitHub</option>
+                        <option value="Portfolio">Portfolio</option>
+                        <option value="Website">Website</option>
+                        <option value="Twitter">Twitter</option>
+                        <option value="Other">Other</option>
+                      </select>
+                      <input
+                        type="url"
+                        value={link.url || ''}
+                        onChange={(e) => {
+                          const newLinks = [...(profile.basics.links || [])];
+                          newLinks[index].url = e.target.value || null;
+                          setProfile({
+                            ...profile,
+                            basics: { ...profile.basics, links: newLinks }
+                          });
+                        }}
+                        className="flex-1 border border-gray-300 rounded-md px-3 py-2 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="https://..."
+                      />
+                      <input
+                        type="text"
+                        value={link.label || ''}
+                        onChange={(e) => {
+                          const newLinks = [...(profile.basics.links || [])];
+                          newLinks[index].label = e.target.value || null;
+                          setProfile({
+                            ...profile,
+                            basics: { ...profile.basics, links: newLinks }
+                          });
+                        }}
+                        className="flex-1 border border-gray-300 rounded-md px-3 py-2 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="Display label"
                       />
                       <button
                         onClick={() => {
-                          const newLanguages = (profile.basics.languages || []).filter((_, i) => i !== index);
+                          const newLinks = (profile.basics.links || []).filter((_, i) => i !== index);
                           setProfile({
                             ...profile,
-                            basics: { ...profile.basics, languages: newLanguages.length > 0 ? newLanguages : null }
+                            basics: { ...profile.basics, links: newLinks.length > 0 ? newLinks : null }
                           });
                         }}
                         className="text-red-600 hover:text-red-800 px-2"
@@ -949,7 +1179,7 @@ export default function ProfileReviewPage() {
                             newExp[index].company = e.target.value;
                             setProfile({ ...profile, work_experience: newExp });
                           }}
-                          className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                          className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                         />
                       </div>
                       <div>
@@ -962,7 +1192,7 @@ export default function ProfileReviewPage() {
                             newExp[index].title = e.target.value;
                             setProfile({ ...profile, work_experience: newExp });
                           }}
-                          className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                          className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                         />
                       </div>
                       <div>
@@ -975,7 +1205,7 @@ export default function ProfileReviewPage() {
                             newExp[index].startDate = e.target.value;
                             setProfile({ ...profile, work_experience: newExp });
                           }}
-                          className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                          className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                           placeholder="e.g., January 2023 or 2023-01"
                         />
                       </div>
@@ -989,7 +1219,7 @@ export default function ProfileReviewPage() {
                             newExp[index].endDate = e.target.value || null;
                             setProfile({ ...profile, work_experience: newExp });
                           }}
-                          className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                          className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                           placeholder="e.g., Present or December 2023"
                         />
                       </div>
@@ -1002,7 +1232,7 @@ export default function ProfileReviewPage() {
                             newExp[index].employmentType = e.target.value || null;
                             setProfile({ ...profile, work_experience: newExp });
                           }}
-                          className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                          className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                         >
                           <option value="">Select type</option>
                           <option value="full-time">Full-time</option>
@@ -1022,25 +1252,65 @@ export default function ProfileReviewPage() {
                             newExp[index].location = e.target.value || null;
                             setProfile({ ...profile, work_experience: newExp });
                           }}
-                          className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                          className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                         />
                       </div>
                     </div>
 
                     {/* Job Description */}
                     <div>
-                      <label className="block text-sm font-medium text-gray-700">Job Description</label>
-                      <textarea
-                        value={exp.description || ''}
-                        onChange={(e) => {
-                          const newExp = [...profile.work_experience];
-                          newExp[index].description = e.target.value || null;
-                          setProfile({ ...profile, work_experience: newExp });
-                        }}
-                        rows={2}
-                        className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                        placeholder="Brief overview of your role and responsibilities..."
-                      />
+                      <div className="flex justify-between items-center mb-2">
+                        <label className="block text-sm font-medium text-gray-700">Job Description</label>
+                        <button
+                          onClick={() => {
+                            const newExp = [...profile.work_experience];
+                            const descriptionBullets = parseDescriptionIntoBullets(exp.description || '');
+                            // Add a new bullet if there are existing bullets, otherwise add first bullet
+                            if (descriptionBullets.length > 0) {
+                              descriptionBullets.push('');
+                            } else {
+                              descriptionBullets.push('');
+                            }
+                            newExp[index].description = descriptionBullets.join('\n\n');
+                            setProfile({ ...profile, work_experience: newExp });
+                          }}
+                          className="text-blue-600 hover:text-blue-800 text-sm"
+                        >
+                          + Add Point
+                        </button>
+                      </div>
+                      <div className="space-y-2">
+                        {parseDescriptionIntoBullets(exp.description || '').map((bullet, bulletIndex) => (
+                          <div key={bulletIndex} className="flex items-start space-x-2">
+                            <span className="text-gray-500 mt-1">•</span>
+                            <input
+                              type="text"
+                              value={bullet}
+                              onChange={(e) => {
+                                const newExp = [...profile.work_experience];
+                                const descriptionBullets = parseDescriptionIntoBullets(exp.description || '');
+                                descriptionBullets[bulletIndex] = e.target.value;
+                                newExp[index].description = descriptionBullets.filter(b => b.trim()).join('\n\n') || null;
+                                setProfile({ ...profile, work_experience: newExp });
+                              }}
+                              className="flex-1 border border-gray-300 rounded-md px-3 py-2 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                              placeholder="Describe your responsibilities and role..."
+                            />
+                            <button
+                              onClick={() => {
+                                const newExp = [...profile.work_experience];
+                                const descriptionBullets = parseDescriptionIntoBullets(exp.description || '');
+                                descriptionBullets.splice(bulletIndex, 1);
+                                newExp[index].description = descriptionBullets.filter(b => b.trim()).join('\n\n') || null;
+                                setProfile({ ...profile, work_experience: newExp });
+                              }}
+                              className="text-red-600 hover:text-red-800 px-2 mt-1"
+                            >
+                              ×
+                            </button>
+                          </div>
+                        ))}
+                      </div>
                     </div>
 
                     {/* Technologies */}
@@ -1054,7 +1324,7 @@ export default function ProfileReviewPage() {
                           newExp[index].technologies = e.target.value.split(',').map(t => t.trim()).filter(t => t);
                           setProfile({ ...profile, work_experience: newExp });
                         }}
-                        className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                        className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                         placeholder="Python, React, Docker"
                       />
                     </div>
@@ -1070,7 +1340,7 @@ export default function ProfileReviewPage() {
                           setProfile({ ...profile, work_experience: newExp });
                         }}
                         rows={3}
-                        className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                        className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                         placeholder="Increased performance by 40%&#10;Led team of 5 developers&#10;..."
                       />
                     </div>
@@ -1104,7 +1374,7 @@ export default function ProfileReviewPage() {
                             newEdu[index].school = e.target.value;
                             setProfile({ ...profile, education: newEdu });
                           }}
-                          className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                          className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                         />
                       </div>
                       <div>
@@ -1117,7 +1387,7 @@ export default function ProfileReviewPage() {
                             newEdu[index].degree = e.target.value;
                             setProfile({ ...profile, education: newEdu });
                           }}
-                          className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                          className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                         />
                       </div>
                       <div>
@@ -1130,7 +1400,7 @@ export default function ProfileReviewPage() {
                             newEdu[index].field = e.target.value || null;
                             setProfile({ ...profile, education: newEdu });
                           }}
-                          className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                          className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                           placeholder="e.g., Computer Science"
                         />
                       </div>
@@ -1144,7 +1414,7 @@ export default function ProfileReviewPage() {
                             newEdu[index].startDate = e.target.value || null;
                             setProfile({ ...profile, education: newEdu });
                           }}
-                          className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                          className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                           placeholder="e.g., September 2020"
                         />
                       </div>
@@ -1158,7 +1428,7 @@ export default function ProfileReviewPage() {
                             newEdu[index].endDate = e.target.value || null;
                             setProfile({ ...profile, education: newEdu });
                           }}
-                          className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                          className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                           placeholder="e.g., May 2024"
                         />
                       </div>
@@ -1173,7 +1443,7 @@ export default function ProfileReviewPage() {
                             newEdu[index].gpa = gpaValue;
                             setProfile({ ...profile, education: newEdu });
                           }}
-                          className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                          className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                           placeholder="e.g., 3.8"
                         />
                       </div>
@@ -1190,7 +1460,7 @@ export default function ProfileReviewPage() {
                           setProfile({ ...profile, education: newEdu });
                         }}
                         rows={3}
-                        className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                        className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                         placeholder="Relevant coursework, honors, activities, thesis..."
                       />
                     </div>
@@ -1207,7 +1477,7 @@ export default function ProfileReviewPage() {
                             setProfile({ ...profile, education: newEdu });
                           }}
                           rows={2}
-                          className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                          className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                           placeholder="Dean's List, Summa Cum Laude..."
                         />
                       </div>
@@ -1221,7 +1491,7 @@ export default function ProfileReviewPage() {
                             setProfile({ ...profile, education: newEdu });
                           }}
                           rows={2}
-                          className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                          className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                           placeholder="Student Council, Computer Science Club..."
                         />
                       </div>
@@ -1256,7 +1526,7 @@ export default function ProfileReviewPage() {
                             newProjects[index].name = e.target.value;
                             setProfile({ ...profile, projects: newProjects });
                           }}
-                          className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                          className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                         />
                       </div>
                       <div>
@@ -1269,7 +1539,7 @@ export default function ProfileReviewPage() {
                             newProjects[index].role = e.target.value || null;
                             setProfile({ ...profile, projects: newProjects });
                           }}
-                          className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                          className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                           placeholder="e.g., Lead Developer, Solo Developer"
                         />
                       </div>
@@ -1283,7 +1553,7 @@ export default function ProfileReviewPage() {
                             newProjects[index].startDate = e.target.value || null;
                             setProfile({ ...profile, projects: newProjects });
                           }}
-                          className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                          className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                           placeholder="e.g., January 2023"
                         />
                       </div>
@@ -1297,7 +1567,7 @@ export default function ProfileReviewPage() {
                             newProjects[index].endDate = e.target.value || null;
                             setProfile({ ...profile, projects: newProjects });
                           }}
-                          className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                          className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                           placeholder="e.g., March 2023 or Present"
                         />
                       </div>
@@ -1312,7 +1582,7 @@ export default function ProfileReviewPage() {
                             newProjects[index].teamSize = teamSizeValue;
                             setProfile({ ...profile, projects: newProjects });
                           }}
-                          className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                          className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                           placeholder="e.g., 5"
                         />
                       </div>
@@ -1325,7 +1595,7 @@ export default function ProfileReviewPage() {
                             newProjects[index].status = e.target.value || null;
                             setProfile({ ...profile, projects: newProjects });
                           }}
-                          className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                          className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                         >
                           <option value="">Select status</option>
                           <option value="completed">Completed</option>
@@ -1337,18 +1607,58 @@ export default function ProfileReviewPage() {
 
                     {/* Project Description */}
                     <div className="mb-4">
-                      <label className="block text-sm font-medium text-gray-700">Project Description</label>
-                      <textarea
-                        value={project.description}
-                        onChange={(e) => {
-                          const newProjects = [...profile.projects];
-                          newProjects[index].description = e.target.value;
-                          setProfile({ ...profile, projects: newProjects });
-                        }}
-                        rows={3}
-                        className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                        placeholder="Describe what the project was about, the problem it solved..."
-                      />
+                      <div className="flex justify-between items-center mb-2">
+                        <label className="block text-sm font-medium text-gray-700">Project Description</label>
+                        <button
+                          onClick={() => {
+                            const newProjects = [...profile.projects];
+                            const descriptionBullets = parseDescriptionIntoBullets(project.description || '');
+                            // Add a new bullet if there are existing bullets, otherwise add first bullet
+                            if (descriptionBullets.length > 0) {
+                              descriptionBullets.push('');
+                            } else {
+                              descriptionBullets.push('');
+                            }
+                            newProjects[index].description = descriptionBullets.join('\n\n');
+                            setProfile({ ...profile, projects: newProjects });
+                          }}
+                          className="text-blue-600 hover:text-blue-800 text-sm"
+                        >
+                          + Add Point
+                        </button>
+                      </div>
+                      <div className="space-y-2">
+                        {parseDescriptionIntoBullets(project.description || '').map((bullet, bulletIndex) => (
+                          <div key={bulletIndex} className="flex items-start space-x-2">
+                            <span className="text-gray-500 mt-1">•</span>
+                            <input
+                              type="text"
+                              value={bullet}
+                              onChange={(e) => {
+                                const newProjects = [...profile.projects];
+                                const descriptionBullets = parseDescriptionIntoBullets(project.description || '');
+                                descriptionBullets[bulletIndex] = e.target.value;
+                                newProjects[index].description = descriptionBullets.filter(b => b.trim()).join('\n\n') || '';
+                                setProfile({ ...profile, projects: newProjects });
+                              }}
+                              className="flex-1 border border-gray-300 rounded-md px-3 py-2 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                              placeholder="Describe the project, problem solved, or key features..."
+                            />
+                            <button
+                              onClick={() => {
+                                const newProjects = [...profile.projects];
+                                const descriptionBullets = parseDescriptionIntoBullets(project.description || '');
+                                descriptionBullets.splice(bulletIndex, 1);
+                                newProjects[index].description = descriptionBullets.filter(b => b.trim()).join('\n\n') || '';
+                                setProfile({ ...profile, projects: newProjects });
+                              }}
+                              className="text-red-600 hover:text-red-800 px-2 mt-1"
+                            >
+                              ×
+                            </button>
+                          </div>
+                        ))}
+                      </div>
                     </div>
 
                     {/* Technologies */}
@@ -1362,7 +1672,7 @@ export default function ProfileReviewPage() {
                           newProjects[index].tech = e.target.value.split(',').map(t => t.trim()).filter(t => t);
                           setProfile({ ...profile, projects: newProjects });
                         }}
-                        className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                        className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                         placeholder="React, Node.js, MongoDB, Docker"
                       />
                     </div>
@@ -1378,7 +1688,7 @@ export default function ProfileReviewPage() {
                           setProfile({ ...profile, projects: newProjects });
                         }}
                         rows={2}
-                        className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                        className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                         placeholder="Increased user engagement by 40%&#10;Reduced loading time by 60%&#10;..."
                       />
                     </div>
@@ -1394,7 +1704,7 @@ export default function ProfileReviewPage() {
                           setProfile({ ...profile, projects: newProjects });
                         }}
                         rows={4}
-                        className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                        className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                         placeholder="• Designed and implemented user authentication system&#10;• Built responsive UI components&#10;• Optimized database queries for better performance&#10;..."
                       />
                     </div>
@@ -1425,7 +1735,7 @@ export default function ProfileReviewPage() {
                         newSkills[index].name = e.target.value;
                         setProfile({ ...profile, skills: newSkills });
                       }}
-                      className="block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      className="block w-full border border-gray-300 rounded-md px-3 py-2 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                       placeholder="Skill name"
                     />
                   </div>
@@ -1457,7 +1767,7 @@ export default function ProfileReviewPage() {
                             newLanguages[index].name = e.target.value;
                             setProfile({ ...profile, languages: newLanguages });
                           }}
-                          className="block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                          className="block w-full border border-gray-300 rounded-md px-3 py-2 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                           placeholder="Language"
                         />
                       </div>
@@ -1469,7 +1779,7 @@ export default function ProfileReviewPage() {
                             newLanguages[index].proficiency = e.target.value || null;
                             setProfile({ ...profile, languages: newLanguages });
                           }}
-                          className="block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                          className="block w-full border border-gray-300 rounded-md px-3 py-2 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                         >
                           <option value="">Select proficiency</option>
                           <option value="native">Native</option>
@@ -1504,7 +1814,7 @@ export default function ProfileReviewPage() {
                     value={markdownContent}
                     onChange={(e) => setMarkdownContent(e.target.value)}
                     rows={40}
-                    className="w-full border border-gray-300 rounded-md px-4 py-3 font-mono text-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full border border-gray-300 rounded-md px-4 py-3 font-mono text-sm text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                     placeholder="Write your resume in markdown format..."
                   />
                 </div>

@@ -45,6 +45,5 @@ class TailorResponse(BaseModel):
     cover_letter_text: str
     autofill_answers: AutofillAnswers
     tailored_resume_docx_url: str
-    tailored_resume_pdf_url: str
     cover_letter_docx_url: Optional[str] = None
     application_package_docx_url: Optional[str] = None
