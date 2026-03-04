@@ -1,10 +1,11 @@
-# Hey there! 👋 Welcome to JobCopilot
+# Hey there! 👋 Welcome to అన్వేషణ (Anveshana)
 
 **Your friendly AI helper for job applications**
 
-Tired of customizing your resume for every single job? JobCopilot makes it easy! Just upload your resume, paste a job posting link, and we'll create perfectly tailored resume and cover letter combinations that actually match what employers want.
+Tired of customizing your resume for every job? అన్వేషణ makes it simple.  
+Just upload your resume, paste a job posting link, and it will generate a tailored resume and cover letter that align with what employers are looking for.
 
-**We're building this together** - come join our friendly open-source community! 🚀
+**We're building this together** — join our open-source community and help make job searching easier for everyone! 🚀
 
 [![GitHub stars](https://img.shields.io/github/stars/DKethan/job-applier-001?style=social)](https://github.com/DKethan/job-applier-001)
 ![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=flat-square&logo=python)
